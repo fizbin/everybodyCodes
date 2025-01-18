@@ -1,0 +1,6 @@
+# I don't think anyone needs to see my input.
+# Besides, this helps to normalize the practice that one *should not* expose
+# one's input with advent-of-code problems (the site creators explicitly ask
+# you to not do that). There's no such request from the creators of everybody
+# codes as far as I can tell, but just in case:
+/everybody_codes_*.txt
