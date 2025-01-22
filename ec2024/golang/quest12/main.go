@@ -124,15 +124,35 @@ func main() {
 			infile = argsWithoutProg[2]
 		}
 		data, _ := os.ReadFile(infile)
+		// 		data = []byte(`6 5
+		// 6 7
+		// 10 5`)
 		scanner := bufio.NewScanner(bytes.NewReader(data))
 		towers := []point{{0, 0}, {0, 1}, {0, 2}}
-		trajArray := make([][][]point, 0)
+		type diffResult struct {
+			height int
+			time   int
+			score  int
+			// for debugging
+			// towerIdx, power int
+		}
+		// x-y -> (height, score)
+		difflookup := make(map[int][]diffResult)
 		for ti, tower := range towers {
-			trajArray = append(trajArray, make([][]point, 0, 2000))
-			for power := range 2000 {
-				trajArray[ti] = append(trajArray[ti], getTrajectory(tower, power))
+			for power := 2000; power >= 0; power-- {
+				trajectory := getTrajectory(tower, power)
+				score := (1 + ti) * power
+				for time, spot := range trajectory {
+					difflookup[spot.x-spot.y] = append(difflookup[spot.x-spot.y], diffResult{height: spot.y, time: time, score: score})
+				}
 			}
 		}
+		// mySorter := func(a, b diffResult) int {
+		// 	if a.height != b.height {
+		// 		return b.height - a.height
+		// 	}
+		// 	return a.score - b.score
+		// }
 		total := 0
 		for scanner.Scan() {
 			numStrs := strings.Fields(scanner.Text())
@@ -140,18 +160,15 @@ func main() {
 			hgt, _ := strconv.Atoi(numStrs[1])
 			solHeight := -1
 			solScore := math.MaxInt
-			for tidx := range towers {
-				for power := range hgt/2 + 5 {
-					trajectory := trajArray[tidx][power]
-					for time, sp := range trajectory {
-						if sp.x-sp.y == col-hgt && sp.x <= col-time {
-							if sp.y > solHeight {
-								solHeight = sp.y
-								solScore = (tidx + 1) * power
-							} else if sp.y == solHeight {
-								solScore = min(solScore, (tidx+1)*power)
-							}
-						}
+			results := difflookup[col-hgt]
+			// slices.SortFunc(results, mySorter)
+			for _, res := range results {
+				if res.time <= hgt-res.height {
+					if res.height > solHeight {
+						solHeight = res.height
+						solScore = res.score
+					} else if res.height == solHeight && res.score < solScore {
+						solScore = res.score
 					}
 				}
 			}
