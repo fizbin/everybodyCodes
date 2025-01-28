@@ -8,6 +8,7 @@ import (
 	"log"
 	"math"
 	"os"
+	"runtime/pprof"
 	"strconv"
 	"strings"
 )
@@ -16,8 +17,18 @@ type point struct {
 	x, y int
 }
 
+var cpuprofile = flag.String("cpuprofile", "", "write cpu profile to file")
+
 func main() {
 	flag.Parse()
+	if *cpuprofile != "" {
+		f, err := os.Create(*cpuprofile)
+		if err != nil {
+			log.Fatal(err)
+		}
+		pprof.StartCPUProfile(f)
+		defer pprof.StopCPUProfile()
+	}
 	argsWithoutProg := flag.Args()
 	{
 		var infile string
@@ -137,13 +148,20 @@ func main() {
 			// towerIdx, power int
 		}
 		// x-y -> (height, score)
-		difflookup := make(map[int][]diffResult)
+		const diffOffset = 100
+		difflookup := make([][]diffResult, 4000)
 		for ti, tower := range towers {
-			for power := 2000; power >= 0; power-- {
+			for power := 1853; power >= 0; power-- {
 				trajectory := getTrajectory(tower, power)
 				score := (1 + ti) * power
 				for time, spot := range trajectory {
-					difflookup[spot.x-spot.y] = append(difflookup[spot.x-spot.y], diffResult{height: spot.y, time: time, score: score})
+					diffkey := spot.x - spot.y
+					if diffkey >= -20 && diffkey <= 3620 {
+						if difflookup[diffkey+diffOffset] == nil {
+							difflookup[diffkey+diffOffset] = make([]diffResult, 0, 6000)
+						}
+						difflookup[diffkey+diffOffset] = append(difflookup[diffkey+diffOffset], diffResult{height: spot.y, time: time, score: score})
+					}
 				}
 			}
 		}
@@ -160,7 +178,7 @@ func main() {
 			hgt, _ := strconv.Atoi(numStrs[1])
 			solHeight := -1
 			solScore := math.MaxInt
-			results := difflookup[col-hgt]
+			results := difflookup[col-hgt+diffOffset]
 			// slices.SortFunc(results, mySorter)
 			for _, res := range results {
 				if res.time <= hgt-res.height {
@@ -183,7 +201,7 @@ func main() {
 }
 
 func getTrajectory(start point, power int) []point {
-	retval := make([]point, 0, 3*(power+2))
+	retval := make([]point, 0, 3*(power+3))
 	for range power {
 		retval = append(retval, start)
 		start = point{start.x + 1, start.y + 1}

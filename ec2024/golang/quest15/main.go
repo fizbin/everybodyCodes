@@ -5,8 +5,10 @@ import (
 	"bytes"
 	"flag"
 	"fmt"
+	"log"
 	"math"
 	"os"
+	"runtime/pprof"
 	"unicode"
 )
 
@@ -27,8 +29,18 @@ func neighbors(current point, gridMap [][]byte, height, width int) []point {
 	return retval
 }
 
+var cpuprofile = flag.String("cpuprofile", "", "write cpu profile to file")
+
 func main() {
 	flag.Parse()
+	if *cpuprofile != "" {
+		f, err := os.Create(*cpuprofile)
+		if err != nil {
+			log.Fatal(err)
+		}
+		pprof.StartCPUProfile(f)
+		defer pprof.StopCPUProfile()
+	}
 	argsWithoutProg := flag.Args()
 	{
 		var infile string
@@ -148,6 +160,27 @@ func doProblem3(data []byte) int {
 	}
 	height = len(gridMap)
 
+	kPower := plantSpec['K']
+	kPowerCols := []int{}
+	plantPowerLeft := uint64(0)
+	plantPowerRight := uint64(0)
+	for idx, plantLoc := range plantLocs {
+		if plantLocPower[idx] == kPower {
+			kPowerCols = append(kPowerCols, plantLoc.y)
+		}
+	}
+	if len(kPowerCols) != 2 {
+		log.Fatal("Expected exactly two K plants")
+	}
+	for idx, plantLoc := range plantLocs {
+		if plantLoc.y < kPowerCols[0] {
+			plantPowerLeft |= plantLocPower[idx]
+		}
+		if plantLoc.y > kPowerCols[1] {
+			plantPowerRight |= plantLocPower[idx]
+		}
+	}
+
 	plMap := make(map[point]int)
 	for idx, plant := range plantLocs {
 		plMap[plant] = idx
@@ -192,6 +225,16 @@ func doProblem3(data []byte) int {
 			// would return just MaxInt, but I don't want overflow on addition later
 			return math.MaxInt - 3*(width+height)
 		}
+		if ((goal & plantPowerLeft) != 0) && ((goal & plantPowerLeft) != plantPowerLeft) {
+			if plantLocPower[ending]&plantPowerLeft == 0 {
+				return math.MaxInt - 3*(width+height)
+			}
+		}
+		if ((goal & plantPowerRight) != 0) && ((goal & plantPowerRight) != plantPowerRight) {
+			if plantLocPower[ending]&plantPowerRight == 0 {
+				return math.MaxInt - 3*(width+height)
+			}
+		}
 		if val, ok := bestDistCache[bestDistCacheType{goal, ending}]; ok {
 			return val
 		}
@@ -201,7 +244,7 @@ func doProblem3(data []byte) int {
 			best = plantGraph[ending][0]
 		} else {
 			for butEnd := 1; butEnd < len(plantGraph); butEnd++ {
-				if butEnd == ending {
+				if butEnd == ending || plantLocPower[butEnd]&preGoal == 0 {
 					continue
 				}
 				newDist := plantGraph[ending][butEnd] + bestDist(preGoal, butEnd)
