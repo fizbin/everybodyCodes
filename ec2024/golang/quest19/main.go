@@ -145,6 +145,8 @@ func doProblem3(data []byte) string {
 	for scanner.Scan() {
 		grid = append(grid, slices.Clone(scanner.Bytes()))
 	}
+	height := len(grid)
+	width := len(grid[0])
 	// fmt.Println("DBG key size:", len(key))
 	// fmt.Println("DBG grid dim:", len(grid), "rows of", len(grid[0]), "cols")
 
@@ -153,26 +155,22 @@ func doProblem3(data []byte) string {
 		blankGrid[rowIdx] = make([]byte, len(row))
 	}
 	transform := make(map[point]point)
-	for rowIdx := range grid {
-		for colIdx := range len(grid[0]) {
-			startPoint := point{rowIdx, colIdx}
-			blankGrid[rowIdx][colIdx] = 1
-			rotate(blankGrid, key)
-			var endPoint point
-			var foundIt bool
-			for endRowIdx, row := range blankGrid {
-				cidx := slices.Index(row, 1)
-				if cidx >= 0 {
-					endPoint = point{endRowIdx, cidx}
-					row[cidx] = 0
-					foundIt = true
-					break
+	gridSize := height * width
+	for startIdx := 0; startIdx < gridSize; startIdx += 255 {
+		for ch := 1; ch < 256; ch++ {
+			if startIdx+ch > gridSize {
+				break
+			}
+			blankGrid[(startIdx+ch-1)/width][(startIdx+ch-1)%width] = byte(ch)
+		}
+		rotate(blankGrid, key)
+		for endRowIdx, row := range blankGrid {
+			for endColIdx, ch := range row {
+				if ch > 0 {
+					transform[point{(startIdx + int(ch) - 1) / width, (startIdx + int(ch) - 1) % width}] = point{endRowIdx, endColIdx}
+					row[endColIdx] = 0
 				}
 			}
-			if !foundIt {
-				panic("Rotated into nothing????!?")
-			}
-			transform[startPoint] = endPoint
 		}
 	}
 	// fmt.Println("DBG transform len", len(transform))
