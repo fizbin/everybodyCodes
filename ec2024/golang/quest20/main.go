@@ -5,12 +5,24 @@ import (
 	"bytes"
 	"flag"
 	"fmt"
+	"log"
 	"os"
+	"runtime/pprof"
 	"slices"
 )
 
+var cpuprofile = flag.String("cpuprofile", "", "write cpu profile to file")
+
 func main() {
 	flag.Parse()
+	if *cpuprofile != "" {
+		f, err := os.Create(*cpuprofile)
+		if err != nil {
+			log.Fatal(err)
+		}
+		pprof.StartCPUProfile(f)
+		defer pprof.StopCPUProfile()
+	}
 	argsWithoutProg := flag.Args()
 	{
 		var infile string
@@ -64,22 +76,12 @@ func doProblem1(data []byte) any {
 		where point
 		dir   point
 	}
-	beenThere := make(map[gState]int)
 	whereWeAre := make(map[gState]int)
-	whereWeAre[gState{startLoc, point{0, -1}}] = 1000
-	whereWeAre[gState{startLoc, point{-1, 0}}] = 1000
-	whereWeAre[gState{startLoc, point{0, 1}}] = 1000
 	whereWeAre[gState{startLoc, point{1, 0}}] = 1000
 	// fmt.Println("DBG preflight ", whereWeAre)
 	for tick := 1; tick <= 100; tick++ {
-		newWhere := make(map[gState]int)
+		newWhere := make(map[gState]int, len(whereWeAre)*3)
 		for state, hgt := range whereWeAre {
-			if prevHgt, ok := beenThere[state]; ok {
-				if prevHgt >= hgt {
-					continue
-				}
-			}
-			beenThere[state] = hgt
 			for _, newState := range []gState{
 				{point{state.where.x + state.dir.x, state.where.y + state.dir.y}, state.dir},
 				{point{state.where.x + state.dir.y, state.where.y - state.dir.x}, point{state.dir.y, -state.dir.x}},
@@ -133,21 +135,11 @@ func doProblem2(data []byte) any {
 		dir   point
 		seen  int // seen 0: start, 1: A, 3: C
 	}
-	beenThere := make(map[gState]int)
 	whereWeAre := make(map[gState]int)
-	whereWeAre[gState{startLoc, point{0, -1}, 0}] = 10000
-	whereWeAre[gState{startLoc, point{-1, 0}, 0}] = 10000
-	whereWeAre[gState{startLoc, point{0, 1}, 0}] = 10000
 	whereWeAre[gState{startLoc, point{1, 0}, 0}] = 10000
 	for tick := 1; true; tick++ {
-		newWhere := make(map[gState]int)
+		newWhere := make(map[gState]int, len(whereWeAre)*2)
 		for state, hgt := range whereWeAre {
-			if prevHgt, ok := beenThere[state]; ok {
-				if prevHgt >= hgt {
-					continue
-				}
-			}
-			beenThere[state] = hgt
 			for _, newState := range []gState{
 				{point{state.where.x + state.dir.x, state.where.y + state.dir.y}, state.dir, 0},
 				{point{state.where.x + state.dir.y, state.where.y - state.dir.x}, point{state.dir.y, -state.dir.x}, 0},
@@ -157,9 +149,6 @@ func doProblem2(data []byte) any {
 					continue
 				}
 				myCh := grid[newState.where.x][newState.where.y]
-				if myCh == '#' {
-					continue
-				}
 				var newHgt int
 				newSeen := state.seen
 				switch myCh {
@@ -167,16 +156,19 @@ func doProblem2(data []byte) any {
 					continue
 				case '+':
 					newHgt = hgt + 1
-				case '.', 'A', 'B', 'C', 'S':
+				case 'A', 'B', 'C':
+					if newSeen == int(myCh-'A') {
+						newSeen++
+					} else {
+						continue
+					}
+					fallthrough
+				case '.':
 					newHgt = hgt - 1
 				case '-':
 					newHgt = hgt - 2
-				}
-				if (newSeen == 0 && myCh == 'A') || (newSeen == 1 && myCh == 'B') || (newSeen == 2 && myCh == 'C') {
-					newSeen++
-				}
-				if grid[newState.where.x][newState.where.y] == 'S' {
-					if newHgt >= 10000 && newSeen == 3 {
+				case 'S':
+					if hgt-1 >= 10000 && newSeen == 3 {
 						return tick
 					}
 					continue
@@ -191,7 +183,6 @@ func doProblem2(data []byte) any {
 }
 
 func doProblem3(data []byte) any {
-
 	scanner := bufio.NewScanner(bytes.NewReader(data))
 	var startLoc point
 	grid := make([][]byte, 0)
@@ -209,23 +200,12 @@ func doProblem3(data []byte) any {
 		where point
 		dir   point
 	}
-	beenThere := make(map[gState]int)
 	whereWeAre := make(map[gState]int)
-	whereWeAre[gState{startLoc, point{0, -1}}] = 384400
-	whereWeAre[gState{startLoc, point{-1, 0}}] = 384400
-	whereWeAre[gState{startLoc, point{0, 1}}] = 384400
 	whereWeAre[gState{startLoc, point{1, 0}}] = 384400
-	// fmt.Println("DBG preflight ", whereWeAre)
 	maxRow := 0
 	for tick := 1; len(whereWeAre) > 0; tick++ {
-		newWhere := make(map[gState]int)
+		newWhere := make(map[gState]int, len(whereWeAre)*3)
 		for state, hgt := range whereWeAre {
-			if prevHgt, ok := beenThere[state]; ok {
-				if prevHgt >= hgt {
-					continue
-				}
-			}
-			beenThere[state] = hgt
 			for _, newState := range []gState{
 				{point{state.where.x + state.dir.x, state.where.y + state.dir.y}, state.dir},
 				{point{state.where.x + state.dir.y, state.where.y - state.dir.x}, point{state.dir.y, -state.dir.x}},

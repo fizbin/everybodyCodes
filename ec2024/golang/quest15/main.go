@@ -6,7 +6,6 @@ import (
 	"flag"
 	"fmt"
 	"log"
-	"math"
 	"os"
 	"runtime/pprof"
 	"unicode"
@@ -160,23 +159,42 @@ func doProblem3(data []byte) int {
 	}
 	height = len(gridMap)
 
+	// Something special about my input is that the grid is divided into three
+	// vertical parts, that are connected only in one spot at the bottom that's
+	// occupied by a "K" plant. Furthermore, plants that appear in one of the
+	// three regions only appear in that region. Therefore, we can divide the
+	// task of traveling salesman into thirds solving it for the left piece and
+	// right piece as one chunk. The key will be that later we know to
+	// immediately bail on any potential solution that gets some of the "left"
+	// (bzw. "right") third but not all of it, and then gets something not
+	// from the "left" ("right") third.
+
+	// Also, the "K" plants have no other plants in the same vertical column
+	// of the map.
+
 	kPower := plantSpec['K']
-	kPowerCols := []int{}
+	kPlantCols := []int{}
+	kPlantIdx := []int{}
 	plantPowerLeft := uint64(0)
 	plantPowerRight := uint64(0)
 	for idx, plantLoc := range plantLocs {
 		if plantLocPower[idx] == kPower {
-			kPowerCols = append(kPowerCols, plantLoc.y)
+			kPlantCols = append(kPlantCols, plantLoc.y)
+			kPlantIdx = append(kPlantIdx, idx)
 		}
 	}
-	if len(kPowerCols) != 2 {
+	if len(kPlantCols) != 2 {
 		log.Fatal("Expected exactly two K plants")
 	}
+
+	// Now we classify plants as "left", "right" or neither based on their
+	// column relative to the two "K" plant columns.
 	for idx, plantLoc := range plantLocs {
-		if plantLoc.y < kPowerCols[0] {
+		if plantLoc.y < kPlantCols[0] {
+			// this plant is a type you see in the left
 			plantPowerLeft |= plantLocPower[idx]
 		}
-		if plantLoc.y > kPowerCols[1] {
+		if plantLoc.y > kPlantCols[1] {
 			plantPowerRight |= plantLocPower[idx]
 		}
 	}
@@ -186,10 +204,20 @@ func doProblem3(data []byte) int {
 		plMap[plant] = idx
 	}
 
-	// map (point, point) -> dist
-	plantGraph := make([][]int, 0, len(plantLocs))
+	// map (point, point) -> dist; this gives the distance between two plants
+	plantGraph := make([][]int, len(plantLocs))
+	for idx := range plantGraph {
+		plantGraph[idx] = make([]int, len(plantLocs))
+	}
 
-	for _, startPlant := range plantLocs {
+	// Now I compute the distance between each pair of plants.
+	// But here I also take advantage of the "divide in thirds" thing
+	// and don't bother to map out distances through "K" plants, since
+	// I know that if there are two plants and the only path is through
+	// a "K" then I can just get the distance from "A" to "B" by adding
+	// "A to K" and "K to B"
+	for startPIdx, startPlant := range plantLocs {
+		plantName := gridMap[startPlant.x][startPlant.y]
 		beenThere := make(map[point]int)
 		beenThere[startPlant] = 0
 		q := []point{startPlant}
@@ -200,46 +228,71 @@ func doProblem3(data []byte) int {
 			for _, nbr := range neighbors(current, gridMap, height, width) {
 				if _, ok := beenThere[nbr]; !ok {
 					beenThere[nbr] = 1 + mydist
-					q = append(q, nbr)
+					if plantName == 'K' || gridMap[nbr.x][nbr.y] != 'K' {
+						q = append(q, nbr)
+					}
 				}
 			}
 		}
-		outMap := make([]int, len(plantLocs))
 		for idx, plant := range plantLocs {
-			outMap[idx] = beenThere[plant]
+			plantGraph[startPIdx][idx] = beenThere[plant]
 		}
-		plantGraph = append(plantGraph, outMap)
+	}
+	// Now add in the distances around the "K" spots
+	for rowIdx, row := range plantGraph {
+		for colIdx, dist := range row {
+			if rowIdx == colIdx {
+				continue
+			} else if dist == 0 {
+				row[colIdx] = min(
+					plantGraph[kPlantIdx[0]][rowIdx]+plantGraph[kPlantIdx[0]][colIdx],
+					plantGraph[kPlantIdx[1]][rowIdx]+plantGraph[kPlantIdx[1]][colIdx])
+			}
+		}
 	}
 	// fmt.Println("DBG: Got all dists")
 
 	plantGoal := (uint64(1) << len(plantSpec)) - 1
 
-	type bestDistCacheType struct {
-		goal   uint64
-		ending int
+	// type bestDistCacheType struct {
+	// 	goal   uint64
+	// 	ending int
+	// }
+	bestDistCache := make([][]int, 0, len(plantGraph))
+	for range plantGraph {
+		bestDistCache = append(bestDistCache, make([]int, plantGoal+1))
 	}
-	bestDistCache := make(map[bestDistCacheType]int)
+
+	const disconnected = 999999
+
+	// bestDist is a function that determines the smallest possible total distance if you
+	// start at the start spot, collect together the plant power bitset in "goal" and
+	// then end at the spot "ending"
 	var bestDist func(uint64, int) int
 	bestDist = func(goal uint64, ending int) int {
 		if plantLocPower[ending]&goal == 0 {
-			// would return just MaxInt, but I don't want overflow on addition later
-			return math.MaxInt - 3*(width+height)
+			return disconnected
 		}
 		if ((goal & plantPowerLeft) != 0) && ((goal & plantPowerLeft) != plantPowerLeft) {
+			// so some, but not all, of the left third.
 			if plantLocPower[ending]&plantPowerLeft == 0 {
-				return math.MaxInt - 3*(width+height)
+				// Collecting some, but not all, of the left third and then ending
+				// *outside* the left third? Not allowed.
+				return disconnected
 			}
 		}
 		if ((goal & plantPowerRight) != 0) && ((goal & plantPowerRight) != plantPowerRight) {
+			// same but for right
 			if plantLocPower[ending]&plantPowerRight == 0 {
-				return math.MaxInt - 3*(width+height)
+				return disconnected
 			}
 		}
-		if val, ok := bestDistCache[bestDistCacheType{goal, ending}]; ok {
+		val := bestDistCache[ending][goal]
+		if val != 0 {
 			return val
 		}
 		preGoal := goal ^ plantLocPower[ending]
-		best := math.MaxInt
+		best := disconnected
 		if preGoal == 0 {
 			best = plantGraph[ending][0]
 		} else {
@@ -251,15 +304,11 @@ func doProblem3(data []byte) int {
 				best = min(newDist, best)
 			}
 		}
-		bestDistCache[bestDistCacheType{goal, ending}] = best
+		bestDistCache[ending][goal] = best
 		return best
 	}
-	for plantIdx := 1; plantIdx < len(plantGraph); plantIdx++ {
-		for goal := uint64(1); goal <= plantGoal; goal = 2*goal + 1 {
-			bestDist(goal, plantIdx)
-		}
-	}
-	best := math.MaxInt
+
+	best := disconnected
 	for plantIdx := 1; plantIdx < len(plantGraph); plantIdx++ {
 		best = min(best, bestDist(plantGoal, plantIdx)+plantGraph[0][plantIdx])
 	}
