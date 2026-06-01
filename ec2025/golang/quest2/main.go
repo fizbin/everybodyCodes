@@ -137,10 +137,14 @@ func main() {
 		for testX := valA.x; testX <= endCorner.x; testX += 1 {
 			for testY := valA.y; testY <= endCorner.y; testY += 1 {
 				if shouldEngrave(CxInt{testX, testY}) {
+					fmt.Print("x")
 					engraved++
+				} else {
+					fmt.Print("·")
 				}
 			}
+			fmt.Println()
 		}
-		fmt.Println("p2:", engraved)
+		fmt.Println("\np2:", engraved)
 	}
 }
