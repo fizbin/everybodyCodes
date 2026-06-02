@@ -48,7 +48,7 @@ func main() {
 }
 
 // affects grid "in place", dir is 1 for R/clockwise, -1 for left/CCW
-func rotate(grid [][]byte, key string) {
+func rotate[E any](grid [][]E, key string) {
 	// 0 1 2
 	// 7   3
 	// 6 5 4
@@ -69,7 +69,7 @@ func rotate(grid [][]byte, key string) {
 			default:
 				log.Fatal("Bad key character", dirByte)
 			}
-			oldStuff := make([]byte, 8)
+			oldStuff := make([]E, 8)
 			for idx := range rowOffsets {
 				oldStuff[idx] = grid[rowIdx+rowOffsets[idx]][colIdx+colOffsets[idx]]
 			}
@@ -150,29 +150,7 @@ func doProblem3(data []byte) string {
 	// fmt.Println("DBG key size:", len(key))
 	// fmt.Println("DBG grid dim:", len(grid), "rows of", len(grid[0]), "cols")
 
-	blankGrid := make([][]byte, len(grid))
-	for rowIdx, row := range grid {
-		blankGrid[rowIdx] = make([]byte, len(row))
-	}
-	transform := make(map[point]point)
-	gridSize := height * width
-	for startIdx := 0; startIdx < gridSize; startIdx += 255 {
-		for ch := 1; ch < 256; ch++ {
-			if startIdx+ch > gridSize {
-				break
-			}
-			blankGrid[(startIdx+ch-1)/width][(startIdx+ch-1)%width] = byte(ch)
-		}
-		rotate(blankGrid, key)
-		for endRowIdx, row := range blankGrid {
-			for endColIdx, ch := range row {
-				if ch > 0 {
-					transform[point{(startIdx + int(ch) - 1) / width, (startIdx + int(ch) - 1) % width}] = point{endRowIdx, endColIdx}
-					row[endColIdx] = 0
-				}
-			}
-		}
-	}
+	transform := deriveTransform(height, width, key)
 	// fmt.Println("DBG transform len", len(transform))
 
 	cycles := make([][]point, 0)
@@ -218,4 +196,22 @@ func doProblem3(data []byte) string {
 		}
 	}
 	return findMessage(grid)
+}
+
+func deriveTransform(height int, width int, key string) map[point]point {
+	workingGrid := make([][]point, height)
+	for rowIdx := range height {
+		workingGrid[rowIdx] = make([]point, 0, width)
+		for colIdx := range width {
+			workingGrid[rowIdx] = append(workingGrid[rowIdx], point{rowIdx, colIdx})
+		}
+	}
+	rotate(workingGrid, key)
+	transform := make(map[point]point)
+	for endRowIdx, row := range workingGrid {
+		for endColIdx, pt := range row {
+			transform[pt] = point{endRowIdx, endColIdx}
+		}
+	}
+	return transform
 }
