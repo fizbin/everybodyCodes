@@ -8,6 +8,7 @@ import (
 	"os"
 	"regexp"
 	"strconv"
+	"time"
 )
 
 var input1 = flag.String("p1", `..\input\everybody_codes_e2025_q09_p1.txt`, "the input for part 1")
@@ -130,51 +131,35 @@ func doProblem2(data []byte) any {
 
 func doProblem3(data []byte) any {
 	scanner := bufio.NewScanner(bytes.NewReader(data))
-	scales := make(map[int]string, 0)
+	scales := make(map[int][]byte, 0)
 	for scanner.Scan() {
 		parts := lineParser.FindStringSubmatch(scanner.Text())
 		scaleNum, _ := strconv.Atoi(parts[1])
-		scales[scaleNum] = parts[2]
+		scales[scaleNum] = []byte(parts[2])
 	}
+	startTime := time.Now()
 	connections := make([][3]int, 0)
-	for childIdx, child := range scales {
-		var match1, match2 int
-		var idx1, idx2 int
-		for idx1 = 1; idx1 <= len(scales)-1; idx1++ {
-			if childIdx == idx1 {
-				continue
-			}
-			for idx2 = idx1 + 1; idx2 <= len(scales); idx2++ {
-				if childIdx == idx2 {
-					continue
-				}
-				match1 = 0
-				match2 = 0
-				for idx, base := range []byte(child) {
-					if (scales[idx1][idx] != base) && (scales[idx2][idx] != base) {
-						match1 = 0
-						match2 = 0
-						break
-					}
-					if scales[idx1][idx] == base {
-						match1++
-					}
-					if scales[idx2][idx] == base {
-						match2++
-					}
-				}
-				if (match1 > 0) && (match2 > 0) {
-					break
+	for idx0 := 1; idx0 <= len(scales)-2; idx0++ {
+		for idx1 := idx0 + 1; idx1 <= len(scales)-1; idx1++ {
+			// var misMatch01 int
+			// for misMatch01 = 0; misMatch01 < len(scales[idx0]); misMatch01++ {
+			// 	if scales[idx0][misMatch01] != scales[idx1][misMatch01] {
+			// 		break
+			// 	}
+			// }
+			for idx2 := idx1 + 1; idx2 <= len(scales); idx2++ {
+				// if misMatch01 < len(scales[idx2]) {
+				// 	if (scales[idx2][misMatch01] != scales[idx1][misMatch01]) && (scales[idx2][misMatch01] != scales[idx0][misMatch01]) {
+				// 		continue
+				// 	}
+				// }
+				if isFamily(scales[idx0], scales[idx1], scales[idx2]) {
+					connections = append(connections, [3]int{idx0, idx1, idx2})
 				}
 			}
-			if (match1 > 0) && (match2 > 0) {
-				break
-			}
-		}
-		if (match1 > 0) && (match2 > 0) {
-			connections = append(connections, [3]int{idx1, idx2, childIdx})
 		}
 	}
+	fmt.Println("Time for finding parents loop", time.Since(startTime))
 	familyNum := make(map[int]int)
 	for key := range scales {
 		familyNum[key] = key
@@ -207,4 +192,22 @@ func doProblem3(data []byte) any {
 	}
 
 	return famScaleTot[maxFam]
+}
+
+func isFamily(a, b, c []byte) bool {
+	childCouldBeA, childCouldBeB, childCouldBeC := true, true, true
+	for idx := range a {
+		aVal := a[idx]
+		bVal := b[idx]
+		cVal := c[idx]
+
+		childCouldBeA = childCouldBeA && ((aVal == bVal) || (aVal == cVal))
+		childCouldBeB = childCouldBeB && ((bVal == aVal) || (bVal == cVal))
+		childCouldBeC = childCouldBeC && ((cVal == aVal) || (cVal == bVal))
+
+		if !(childCouldBeA || childCouldBeB || childCouldBeC) {
+			return false
+		}
+	}
+	return childCouldBeA || childCouldBeB || childCouldBeC
 }
