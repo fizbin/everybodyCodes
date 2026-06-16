@@ -134,66 +134,75 @@ func doProblem3(data []byte) any {
 		}
 		row++
 	}
+	// startTime := time.Now()
+	maxFirstBoom := 0
 	maxFirstCoord := coord{-1, -1}
-	var maxFirstMap map[coord]bool
-	for r := range row {
-		for c := range col {
-			me := coord{r, c}
-			if maxFirstMap[me] {
+	knownExplosions := make(map[coord]map[coord]bool)
+	for focusVal := byte('0'); focusVal <= '9'; focusVal++ {
+		for me, megrid := range grid {
+			if (focusVal != megrid) || (knownExplosions[me] != nil) {
 				continue
 			}
-			exploded := explode(grid, []coord{me}, nil)
-			if maxFirstMap == nil || len(exploded) > len(maxFirstMap) {
+			exploded := explode(grid, me, knownExplosions)
+			if len(exploded) > maxFirstBoom {
 				maxFirstCoord = me
-				maxFirstMap = exploded
+				maxFirstBoom = len(exploded)
 			}
 		}
 	}
+	maxFirstMap := knownExplosions[maxFirstCoord]
+	// fmt.Println("So far1", time.Since(startTime))
 	maxSecondCoord := coord{-1, -1}
-	var maxSecondMap map[coord]bool
+	maxSecondBoom := 0
 	for r := range row {
 		for c := range col {
 			me := coord{r, c}
-			if maxFirstMap[me] || maxSecondMap[me] {
+			if knownExplosions[maxSecondCoord][me] || maxFirstMap[me] {
 				continue
 			}
-			exploded := explode(grid, []coord{me}, maxFirstMap)
-			if maxSecondMap == nil || len(exploded) > len(maxSecondMap) {
+			newBoom := 0
+			for c := range knownExplosions[me] {
+				if !maxFirstMap[c] {
+					newBoom++
+				}
+			}
+			if newBoom > maxSecondBoom {
+				maxSecondBoom = newBoom
 				maxSecondCoord = me
-				maxSecondMap = exploded
 			}
 		}
 	}
+	// fmt.Println("So far2", time.Since(startTime))
 	maxThirdCoord := coord{-1, -1}
-	var maxThirdMap map[coord]bool
+	maxThirdBoom := 0
 	for r := range row {
 		for c := range col {
 			me := coord{r, c}
-			if maxSecondMap[me] || maxThirdMap[me] {
+			if knownExplosions[maxThirdCoord][me] || knownExplosions[maxSecondCoord][me] || maxFirstMap[me] {
 				continue
 			}
-			exploded := explode(grid, []coord{me}, maxSecondMap)
-			if maxThirdMap == nil || len(exploded) > len(maxThirdMap) {
+			newBoom := 0
+			for c := range knownExplosions[me] {
+				if !(maxFirstMap[c] || knownExplosions[maxSecondCoord][c]) {
+					newBoom++
+				}
+			}
+			if newBoom > maxThirdBoom {
+				maxThirdBoom = newBoom
 				maxThirdCoord = me
-				maxThirdMap = exploded
 			}
 		}
 	}
-	return len(explode(grid, []coord{maxFirstCoord, maxSecondCoord, maxThirdCoord}, nil))
+	// fmt.Println("So far3", time.Since(startTime))
+	return (maxFirstBoom + maxSecondBoom + maxThirdBoom)
 }
 
-func explode(grid map[coord]byte, start []coord, alreadyExploded map[coord]bool) map[coord]bool {
+func explode(grid map[coord]byte, start coord, knownExplosions map[coord]map[coord]bool) map[coord]bool {
 	exploded := make(map[coord]bool)
-	recent := make([]coord, 0, len(start))
-	for _, c := range start {
-		exploded[c] = true
-		recent = append(recent, c)
-	}
-	for k, v := range alreadyExploded {
-		if v {
-			exploded[k] = true
-		}
-	}
+	recent := []coord{start}
+	startval := grid[start]
+	sameAsStart := make([]coord, 0)
+	exploded[start] = true
 	for len(recent) > 0 {
 		newrecent := make([]coord, 0, len(recent))
 		for _, boom := range recent {
@@ -202,13 +211,26 @@ func explode(grid map[coord]byte, start []coord, alreadyExploded map[coord]bool)
 				if !exploded[nxt] {
 					nxtval := grid[nxt]
 					if '0' <= nxtval && nxtval <= grid[boom] {
-						newrecent = append(newrecent, nxt)
-						exploded[nxt] = true
+						if prevKnown, ok := knownExplosions[nxt]; ok {
+							for k := range prevKnown {
+								exploded[k] = true
+							}
+						} else {
+							newrecent = append(newrecent, nxt)
+							exploded[nxt] = true
+							if nxtval == startval {
+								sameAsStart = append(sameAsStart, nxt)
+							}
+						}
 					}
 				}
 			}
 		}
 		recent = newrecent
+	}
+	knownExplosions[start] = exploded
+	for _, c := range sameAsStart {
+		knownExplosions[c] = exploded
 	}
 	return exploded
 }
