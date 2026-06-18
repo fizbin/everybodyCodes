@@ -205,8 +205,8 @@ func doProblem3(data []byte) any {
 			}
 			if current.where == sLoc {
 				if current.waypoints >= 3 {
-					// fmt.Println("Found at radius", radius, "time", current.time, "where", current.where)
 					if false {
+						fmt.Println("Found at radius", radius, "time", current.time, "where", current.where)
 						debugPrintAll(grid, rows, cols, &current)
 					}
 					return current.time * radius
@@ -233,6 +233,10 @@ func doProblem3(data []byte) any {
 				case 2:
 					if nbr.x == atLoc.x && nbr.y > atLoc.y {
 						nbrWaypoints++
+					}
+				case 3:
+					if nbr.x > atLoc.x && nbr.y == atLoc.y {
+						nbrWaypoints--
 					}
 				}
 				heap.Push(&myHeap, searchLoc{nbr, nbrWaypoints, current.time + grid[nbr], &current})
