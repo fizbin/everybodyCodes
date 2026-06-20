@@ -61,14 +61,14 @@ func doProblem1(data []byte) any {
 		height, _ := strconv.Atoi(numStrs[2])
 		walls = append(walls, wallInfo{x, y, height})
 	}
-	// height off floor -> negative number of up flaps
-	myLocs := make(map[int]int)
-	myLocs[0] = 0
+	// height off floor -> can I get there
+	myLocs := make(map[int]bool)
+	myLocs[0] = true
 	currX := 0
 	for _, wall := range walls {
-		newLocs := make(map[int]int)
+		newLocs := make(map[int]bool)
 		xDist := wall.x - currX
-		for duckY, duckUpFlapsNeg := range myLocs {
+		for duckY, _ := range myLocs {
 			for tgt := wall.y; tgt < wall.y+wall.height; tgt++ {
 				yDist := duckY - tgt
 				if (xDist%2 == 0) != (yDist%2 == 0) {
@@ -80,7 +80,7 @@ func doProblem1(data []byte) any {
 				if upFlaps < 0 || upFlaps > xDist {
 					continue
 				}
-				newLocs[tgt] = min(newLocs[tgt], duckUpFlapsNeg-upFlaps)
+				newLocs[tgt] = true
 			}
 		}
 		currX = wall.x
@@ -88,8 +88,8 @@ func doProblem1(data []byte) any {
 		// fmt.Println(myLocs)
 	}
 	minUpFlaps := 999999999999
-	for _, upFlapsNeg := range myLocs {
-		minUpFlaps = min(minUpFlaps, -upFlapsNeg)
+	for loc := range myLocs {
+		minUpFlaps = min(minUpFlaps, (loc+currX)/2)
 	}
 	return minUpFlaps
 }
@@ -116,15 +116,15 @@ func doProblem2(data []byte) any {
 		walls2 = append(walls2, walls1[idx:idxhigh])
 		idx = idxhigh - 1
 	}
-	// height off floor -> negative number of up flaps
-	myLocs := make(map[int]int)
-	myLocs[0] = 0
+	// height off floor -> can I get there
+	myLocs := make(map[int]bool)
+	myLocs[0] = true
 	currX = 0
 	for _, walls := range walls2 {
-		newLocs := make(map[int]int)
+		newLocs := make(map[int]bool)
 		xDist := walls[0].x - currX
 		for _, wall := range walls {
-			for duckY, duckUpFlapsNeg := range myLocs {
+			for duckY, _ := range myLocs {
 				for tgt := wall.y; tgt < wall.y+wall.height; tgt++ {
 					yDist := duckY - tgt
 					if (xDist%2 == 0) != (yDist%2 == 0) {
@@ -136,17 +136,16 @@ func doProblem2(data []byte) any {
 					if upFlaps < 0 || upFlaps > xDist {
 						continue
 					}
-					newLocs[tgt] = min(newLocs[tgt], duckUpFlapsNeg-upFlaps)
+					newLocs[tgt] = true
 				}
 			}
 		}
 		currX = walls[0].x
 		myLocs = newLocs
-		// fmt.Println(myLocs)
 	}
 	minUpFlaps := 999999999999
-	for _, upFlapsNeg := range myLocs {
-		minUpFlaps = min(minUpFlaps, -upFlapsNeg)
+	for loc, _ := range myLocs {
+		minUpFlaps = min(minUpFlaps, (currX+loc)/2)
 	}
 	return minUpFlaps
 }
