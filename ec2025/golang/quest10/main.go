@@ -49,7 +49,7 @@ type coord struct {
 	x, y int
 }
 
-var jumps = []coord{coord{-1, -2}, coord{-2, -1}, coord{2, -1}, coord{-1, 2}, coord{-2, 1}, coord{1, -2}, coord{1, 2}, coord{2, 1}}
+var jumps = []coord{{-1, -2}, {-2, -1}, {2, -1}, {-1, 2}, {-2, 1}, {1, -2}, {1, 2}, {2, 1}}
 
 func doProblem1(data []byte) any {
 	scanner := bufio.NewScanner(bytes.NewReader(data))
@@ -73,6 +73,9 @@ func doProblem1(data []byte) any {
 		for _, jump := range jumps {
 			for start := range possibleMoves {
 				dst := coord{jump.x + start.x, jump.y + start.y}
+				if board[dst] == 0 {
+					continue
+				}
 				if board[dst] == 'S' {
 					sheepEaten[dst] = true
 				}
@@ -107,6 +110,9 @@ func doProblem2(data []byte) any {
 		for _, jump := range jumps {
 			for start := range pDragons {
 				dst := coord{jump.x + start.x, jump.y + start.y}
+				if board[dst] == 0 {
+					continue
+				}
 				if dst.x >= row {
 					continue
 				}
@@ -175,12 +181,16 @@ func nMovesSheep(state memoKey, memo map[memoKey]uint64, board map[coord]byte, r
 			anySheep = true
 			if state.sheep[c]+1 == row {
 				// moving this sheep means sheep escape
+				// we can't count combinations that make this move, but also we shouldn't later
+				// take the code path that means "we had to skip the sheep turn because they had no possible moves"
 				allBlocked = false
 				continue
 			}
 			if (state.dragon.y == c) && (state.sheep[c]+1 == state.dragon.x) && (board[state.dragon] != '#') {
 				// moving this sheep means dragon would eat it, so don't move it
+				continue
 			} else {
+				// we can move this sheep and keep going
 				allBlocked = false
 				nState := memoKey{state.dragon, state.sheep}
 				nState.sheep[c] += 1
@@ -194,6 +204,7 @@ func nMovesSheep(state memoKey, memo map[memoKey]uint64, board map[coord]byte, r
 		ans = 1
 	}
 	if ans == 0 && allBlocked {
+		// we had to skip the sheep's turn
 		ans = nMovesDragon(state, memo, board, row, col)
 	}
 	if ans > 0 {
@@ -208,16 +219,7 @@ func nMovesDragon(state memoKey, memo map[memoKey]uint64, board map[coord]byte, 
 	for _, jump := range jumps {
 		nDragon := coord{state.dragon.x + jump.x, state.dragon.y + jump.y}
 		nSheep := state.sheep
-		if nDragon.x < 0 {
-			continue
-		}
-		if nDragon.y < 0 {
-			continue
-		}
-		if nDragon.x >= row {
-			continue
-		}
-		if nDragon.y >= col {
+		if nDragon.x < 0 || nDragon.y < 0 || nDragon.x >= row || nDragon.y >= col {
 			continue
 		}
 		if board[nDragon] != '#' {

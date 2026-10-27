@@ -173,14 +173,14 @@ func namesPossible(lengthSoFar int, prevChar byte, ruleMap map[byte][]byte, memo
 		return computed
 	}
 	if lengthSoFar == 11 {
-		return 1
+		return 1 // If we already have 11 characters, our only possibility is stopping now
 	}
 	if lengthSoFar > 11 {
 		return 0
 	}
-	var retval uint64
+	var retval uint64 // rmember: defaults to 0
 	if lengthSoFar >= 7 {
-		retval = 1
+		retval = 1 // If we already have 7 characters, one option is stopping now
 	}
 	for _, nextch := range ruleMap[prevChar] {
 		retval += namesPossible(lengthSoFar+1, nextch, ruleMap, memo)

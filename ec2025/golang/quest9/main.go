@@ -8,7 +8,6 @@ import (
 	"os"
 	"regexp"
 	"strconv"
-	"time"
 )
 
 var input1 = flag.String("p1", `..\input\everybody_codes_e2025_q09_p1.txt`, "the input for part 1")
@@ -137,7 +136,7 @@ func doProblem3(data []byte) any {
 		scaleNum, _ := strconv.Atoi(parts[1])
 		scales[scaleNum] = []byte(parts[2])
 	}
-	startTime := time.Now()
+	// startTime := time.Now()
 	connections := make([][3]int, 0)
 	for idx0 := 1; idx0 <= len(scales)-2; idx0++ {
 		for idx1 := idx0 + 1; idx1 <= len(scales)-1; idx1++ {
@@ -159,7 +158,7 @@ func doProblem3(data []byte) any {
 			}
 		}
 	}
-	fmt.Println("Time for finding parents loop", time.Since(startTime))
+	// fmt.Println("Time for finding parents loop", time.Since(startTime))
 	familyNum := make(map[int]int)
 	for key := range scales {
 		familyNum[key] = key

@@ -53,7 +53,7 @@ func doProblem1(data []byte) any {
 		val, _ := strconv.Atoi(scanner.Text())
 		duckData = append(duckData, val)
 	}
-	nextShouldHaveFewer := true
+	nextShouldHaveFewer := !true
 	for round := 1; round <= 10; round++ {
 		foundMove := false
 		for idx := 0; idx < len(duckData)-1; idx++ {
@@ -74,6 +74,12 @@ func doProblem1(data []byte) any {
 		if nextShouldHaveFewer && !foundMove {
 			round--
 			nextShouldHaveFewer = false
+		} else {
+			fmt.Printf("%d:", round)
+			for _, val := range duckData {
+				fmt.Printf(" %d", val)
+			}
+			fmt.Println()
 		}
 	}
 	chkSum := 0

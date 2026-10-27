@@ -137,6 +137,8 @@ func doProblem3(data []byte) any {
 	high := 100
 	for ; blocksNeeded(high, spell) < blocksTarget; high *= 2 {
 	}
+	// from this point forward, we are guaranteed always that
+	// blocksNeeded(low, spell) < blocksTarget AND blocksNeeded(high, spell) > blocksTarget
 	for high-low > 1 {
 		mid := high/2 + low/2
 		if (high%2 == 1) && (low%2 == 1) {

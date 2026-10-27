@@ -76,7 +76,6 @@ func doProblem2(data []byte) any {
 	pspot := 0
 	for _, spotStr := range spots {
 		spot, _ := strconv.Atoi(spotStr)
-		// count crossings here - TODO
 		for _, seg := range prevSegs {
 			easyReject := (spot == seg.a) || (spot == seg.b) || (pspot == seg.a) || (pspot == seg.b)
 			if easyReject {
