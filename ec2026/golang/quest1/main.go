@@ -121,7 +121,6 @@ func doProblem3(data []byte) any {
 			nextSq = nextPerfectSquare(nextSq + 1)
 		}
 		nextSq -= 1
-		fmt.Println("Had ", myInt, " needed a total of ", nextSq)
 		ans += nextSq - myInt
 	}
 	return ans
