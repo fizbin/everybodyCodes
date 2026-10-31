@@ -116,10 +116,15 @@ func evalIso2Vote(stdNum, voteNum string) *big.Int {
 		cmpVal := tstVal.Cmp(baseVal)
 		nTst := tst + 9 - (tst % 10)
 		if cmpVal > 0 {
+			// if tst%10 == 0 {
+			// 	tst = tst + 99 - (tst % 100)
+			// } else {
 			tst = nTst
+			// }
 		} else if cmpVal < 0 {
 			if nTst < voteI {
-				nTstVal := evalVote(stdNum, strconv.Itoa(nTst))
+				nTstVal := big.NewInt(0)
+				nTstVal.Add(tstVal, big.NewInt(int64(nTst-tst)))
 				if nTstVal.Cmp(baseVal) >= 0 {
 					return big.NewInt(0)
 				} else {
