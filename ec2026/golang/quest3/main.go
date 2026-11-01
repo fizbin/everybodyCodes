@@ -114,25 +114,39 @@ func evalIso2Vote(stdNum, voteNum string) *big.Int {
 		tstStr := strconv.Itoa(tst)
 		tstVal := evalVote(stdNum, tstStr)
 		cmpVal := tstVal.Cmp(baseVal)
-		nTst := tst + 9 - (tst % 10)
-		if cmpVal > 0 {
-			// if tst%10 == 0 {
-			// 	tst = tst + 99 - (tst % 100)
-			// } else {
-			tst = nTst
-			// }
-		} else if cmpVal < 0 {
-			if nTst < voteI {
-				nTstVal := big.NewInt(0)
-				nTstVal.Add(tstVal, big.NewInt(int64(nTst-tst)))
-				if nTstVal.Cmp(baseVal) >= 0 {
-					return big.NewInt(0)
-				} else {
-					tst = nTst
+		if cmpVal == 0 {
+			return big.NewInt(0)
+		}
+		// We can do this trick we now do with the last two digits because we are
+		// guaranteed that we'll hit every value in the range
+		// [evalVote(stdNum, N..N00), evalVote(stdNum, N..N99)], but with the last
+		// three digits we aren't guaranteed that; e.g. consider ISO2-3721 and look
+		// at evalVote(stdNum, x) for x between 1000 and 1999 - you'll skip every
+		// value v in that range that has 5 < (v % 49) < 27, because the last two digits
+		// can only add something between 0 and 27, and the third-to-last digit jumps
+		// the value by increments of 49.
+
+		// So can we jump ahead to last two digits 99?
+		if tst%100 == 0 {
+			nTst := tst + 99 - (tst % 100)
+			if cmpVal > 0 {
+				// we're already over - might as well jump to ...99
+				tst = nTst
+			} else if cmpVal < 0 {
+				// we're under - now check whether we're over if all we
+				// change is to make the last digits 99. If so,
+				// there must be something in between that would make a match,
+				// so we can go ahead and return 0 right now
+				if nTst < voteI {
+					nTstVal := evalVote(stdNum, strconv.Itoa(nTst))
+					if nTstVal.Cmp(baseVal) >= 0 {
+						return big.NewInt(0)
+					} else {
+						// okay, still under - might as well jump to last digits 99
+						tst = nTst
+					}
 				}
 			}
-		} else {
-			return big.NewInt(0)
 		}
 	}
 	return baseVal
