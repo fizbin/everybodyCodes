@@ -102,6 +102,7 @@ func sumPortalDist(portalDist map[point]int) int {
 }
 
 func computePortalDist(portalCount int, connections map[point]bool, portalDist map[point]int) map[point]int {
+	portalsToWatch := make(map[int]bool)
 	for start := range portalCount {
 		for end := range portalCount {
 			if _, ok := portalDist[point{start, end}]; !ok {
@@ -109,18 +110,23 @@ func computePortalDist(portalCount int, connections map[point]bool, portalDist m
 			}
 		}
 		portalDist[point{start, start}] = 0
+		portalsToWatch[start] = true
 	}
-	keepGoing := true
-	for keepGoing {
-		keepGoing = false
-		for portal := range portalCount {
+	for len(portalsToWatch) > 0 {
+		oPortalsToWatch := portalsToWatch
+		portalsToWatch = make(map[int]bool)
+		for portal := range oPortalsToWatch {
 			for other := range portalCount {
 				if connections[point{portal, other}] {
 					for end := range portalCount {
 						newval := 1 + portalDist[point{other, end}]
 						if newval < portalDist[point{portal, end}] {
-							keepGoing = true
+							portalsToWatch[portal] = true
 							portalDist[point{portal, end}] = newval
+							if newval < portalDist[point{end, portal}] {
+								portalsToWatch[end] = true
+								portalDist[point{end, portal}] = newval
+							}
 						}
 					}
 				}
@@ -166,7 +172,7 @@ func doProblem2(data []byte) any {
 
 	resonance := 0
 	for start := range portalCount {
-		for end := range portalCount {
+		for end := start + 1; end < portalCount; end++ {
 			if !connections[point{start, end}] {
 				connections[point{start, end}] = true
 				connections[point{end, start}] = true
@@ -231,15 +237,24 @@ func doProblem3(data []byte) any {
 			gems = append(gems, gem)
 		}
 		for _, arrangement := range getGemPairs(gems) {
-			myConnection := maps.Clone(connections)
-			for _, pt := range arrangement {
-				myConnection[pt] = true
-				myConnection[point{pt.y, pt.x}] = true
+			added := make([]bool, len(arrangement))
+			for idx, pt := range arrangement {
+				if !connections[pt] {
+					connections[pt] = true
+					connections[point{pt.y, pt.x}] = true
+					added[idx] = true
+				}
 			}
 			cloned := maps.Clone(partialDist)
-			newTotal := sumPortalDist(computePortalDist(portalCount, myConnection, cloned))
+			newTotal := sumPortalDist(computePortalDist(portalCount, connections, cloned))
 			// fmt.Println("newTotal", newTotal, "for", arrangement)
 			resonance = max(resonance, originalTotal-newTotal)
+			for idx, pt := range arrangement {
+				if added[idx] {
+					delete(connections, pt)
+					delete(connections, point{pt.y, pt.x})
+				}
+			}
 		}
 	}
 	return resonance
