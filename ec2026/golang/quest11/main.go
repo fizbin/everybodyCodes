@@ -52,6 +52,13 @@ type point struct {
 	x, y int
 }
 
+func minpt(pt point) point {
+	if pt.y < pt.x {
+		return point{pt.y, pt.x}
+	}
+	return pt
+}
+
 func doProblem1(data []byte) any {
 	scanner := bufio.NewScanner(bytes.NewReader(data))
 	prsr1 := regexp.MustCompile(`portals: (\d+)`)
@@ -66,14 +73,13 @@ func doProblem1(data []byte) any {
 		matched2 := prsr2.FindStringSubmatch(scanner.Text())
 		v1, _ := strconv.Atoi(matched2[1])
 		v2, _ := strconv.Atoi(matched2[2])
-		side1 = append(side1, v1, v2)
-		side2 = append(side2, v2, v1)
+		side1 = append(side1, v1)
+		side2 = append(side2, v2)
 	}
 
 	connections := make(map[point]bool)
 	for start := range portalCount {
-		connections[point{start, (start + 1) % portalCount}] = true
-		connections[point{start, (start + portalCount - 1) % portalCount}] = true
+		connections[minpt(point{start, (start + 1) % portalCount})] = true
 	}
 	// oPD := computePortalDist(portalCount, connections)
 	// originalTotal := 0
@@ -84,7 +90,7 @@ func doProblem1(data []byte) any {
 	// }
 	originalTotal := (portalCount * portalCount * portalCount) / 4
 	for idx := range side1 {
-		connections[point{side1[idx], side2[idx]}] = true
+		connections[minpt(point{side1[idx], side2[idx]})] = true
 	}
 
 	portalDist := computePortalDist(portalCount, connections, make(map[point]int))
@@ -98,13 +104,13 @@ func sumPortalDist(portalDist map[point]int) int {
 	for _, dist := range portalDist {
 		sum += dist
 	}
-	return sum
+	return sum * 2
 }
 
 func computePortalDist(portalCount int, connections map[point]bool, portalDist map[point]int) map[point]int {
 	portalsToWatch := make(map[int]bool)
 	for start := range portalCount {
-		for end := range portalCount {
+		for end := start + 1; end < portalCount; end++ {
 			if _, ok := portalDist[point{start, end}]; !ok {
 				portalDist[point{start, end}] = portalCount
 			}
@@ -115,18 +121,14 @@ func computePortalDist(portalCount int, connections map[point]bool, portalDist m
 	for len(portalsToWatch) > 0 {
 		oPortalsToWatch := portalsToWatch
 		portalsToWatch = make(map[int]bool)
-		for portal := range oPortalsToWatch {
-			for other := range portalCount {
-				if connections[point{portal, other}] {
+		for portal := range portalCount {
+			for other := range oPortalsToWatch {
+				if connections[minpt(point{portal, other})] {
 					for end := range portalCount {
-						newval := 1 + portalDist[point{other, end}]
-						if newval < portalDist[point{portal, end}] {
+						newval := 1 + portalDist[minpt(point{other, end})]
+						if newval < portalDist[minpt(point{portal, end})] {
 							portalsToWatch[portal] = true
-							portalDist[point{portal, end}] = newval
-							if newval < portalDist[point{end, portal}] {
-								portalsToWatch[end] = true
-								portalDist[point{end, portal}] = newval
-							}
+							portalDist[minpt(point{portal, end})] = newval
 						}
 					}
 				}
