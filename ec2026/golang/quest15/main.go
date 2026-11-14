@@ -58,6 +58,8 @@ func main() {
 	}
 }
 
+// I call the coords x and y, but they're really row and column - "x" is
+// vertical and increases as you go down, "y" is horizontal
 type point struct {
 	x, y int
 }
@@ -79,17 +81,12 @@ type cartState struct {
 	sulfurs             int
 }
 
-// only for p2
-type cartOrientation struct {
-	position, direction point
-}
-
 type qType struct {
 	dist  int
 	state cartState
 
-	// this field is only used in the first part of p3; mostly it's nil
-	prevMidlineUp *qType
+	// this field is only used in p3; mostly it's nil
+	loopStart *qType
 }
 
 type P1Queue []*qType
@@ -145,13 +142,24 @@ func doProblem1(data []byte) any {
 	cache := make(map[cartState]bool)
 	neighbors := func(where cartState) []cartState {
 		retval := make([]cartState, 0, 3)
-		fwdSpot := cartState{position: addpt(where.position, where.direction), direction: where.direction, sulfurs: where.sulfurs}
-		leftSpot := cartState{position: addpt(where.position, leftpt(where.direction)), direction: leftpt(where.direction), sulfurs: where.sulfurs}
-		rightSpot := cartState{position: addpt(where.position, rightpt(where.direction)), direction: rightpt(where.direction), sulfurs: where.sulfurs}
+		fwdSpot := cartState{
+			position:  addpt(where.position, where.direction),
+			direction: where.direction}
+		leftSpot := cartState{
+			position:  addpt(where.position, leftpt(where.direction)),
+			direction: leftpt(where.direction)}
+		rightSpot := cartState{
+			position:  addpt(where.position, rightpt(where.direction)),
+			direction: rightpt(where.direction)}
 		for _, st := range []*cartState{&fwdSpot, &leftSpot, &rightSpot} {
+			st.sulfurs = where.sulfurs
 			switch grid[st.position] {
-			case '.', 'E':
+			case '.':
 				retval = append(retval, *st)
+			case 'E':
+				if st.sulfurs+1 == 1<<len(sulfurName) {
+					retval = append(retval, *st)
+				}
 			case '@':
 				st.sulfurs |= sulfurName[st.position]
 				retval = append(retval, *st)
@@ -168,7 +176,7 @@ func doProblem1(data []byte) any {
 			continue
 		}
 		cache[me.state] = true
-		if grid[me.state.position] == 'E' && me.state.sulfurs+1 == 1<<len(sulfurName) {
+		if grid[me.state.position] == 'E' {
 			return me.dist
 		}
 		nbrs := neighbors(me.state)
@@ -187,7 +195,6 @@ func doProblem2(data []byte) any {
 	grid := make(map[point]byte)
 	sSpot := point{}
 	eSpot := point{}
-	sulfurName := make(map[point]int)
 	for scanner.Scan() {
 		width = max(width, len(scanner.Bytes()))
 		for y, ch := range scanner.Bytes() {
@@ -198,8 +205,6 @@ func doProblem2(data []byte) any {
 				sSpot = here
 			case 'E':
 				eSpot = here
-			case '@':
-				sulfurName[here] = 1 << len(sulfurName)
 			}
 		}
 		height++
@@ -207,13 +212,24 @@ func doProblem2(data []byte) any {
 	initState := cartState{position: sSpot, direction: point{0, 1}, sulfurs: 0}
 	neighbors := func(where *cartState) []cartState {
 		retval := make([]cartState, 0, 3)
-		fwdSpot := cartState{position: addpt(where.position, where.direction), direction: where.direction, sulfurs: where.sulfurs}
-		leftSpot := cartState{position: addpt(where.position, leftpt(where.direction)), direction: leftpt(where.direction), sulfurs: where.sulfurs}
-		rightSpot := cartState{position: addpt(where.position, rightpt(where.direction)), direction: rightpt(where.direction), sulfurs: where.sulfurs}
+		fwdSpot := cartState{
+			position:  addpt(where.position, where.direction),
+			direction: where.direction}
+		leftSpot := cartState{
+			position:  addpt(where.position, leftpt(where.direction)),
+			direction: leftpt(where.direction)}
+		rightSpot := cartState{
+			position:  addpt(where.position, rightpt(where.direction)),
+			direction: rightpt(where.direction)}
 		for _, st := range []*cartState{&fwdSpot, &leftSpot, &rightSpot} {
+			st.sulfurs = where.sulfurs
 			switch grid[st.position] {
-			case '.', 'E':
+			case '.':
 				retval = append(retval, *st)
+			case 'E':
+				if st.sulfurs >= 2026 {
+					retval = append(retval, *st)
+				}
 			case '@':
 				st.sulfurs++
 				retval = append(retval, *st)
@@ -224,23 +240,31 @@ func doProblem2(data []byte) any {
 	var myQueue P1Queue
 	myQueue = append(myQueue, &qType{dist: 0, state: initState})
 	heap.Init(&myQueue)
-	// note that the cache key type doesn't include sulfurs this time
+
+	// the cache key type doesn't include sulfurs this time; this time the
+	// cache is a map to number of sulfurs, so we can throw away paths if
+	// we already handled at least that many sulfurs at that spot+dir
+	type cartOrientation struct {
+		position, direction point
+	}
 	cache := make(map[cartOrientation]int)
 	for myQueue.Len() > 0 {
 		me := heap.Pop(&myQueue).(*qType)
-		meOrientation := cartOrientation{direction: me.state.direction, position: me.state.position}
+		meOrientation := cartOrientation{
+			direction: me.state.direction,
+			position:  me.state.position}
 		if cVal, ok := cache[meOrientation]; ok && cVal >= me.state.sulfurs {
-			// Our cache this time also throws stuff away if we've already
-			// been here facing the same direction with more sulfurs,
-			// not just when the sulfur count was exactly equal
 			continue
 		}
 		cache[meOrientation] = me.state.sulfurs
-		if grid[me.state.position] == 'E' && me.state.sulfurs >= 2026 {
+		if me.state.position == eSpot {
 			return me.dist
 		}
 		nbrs := neighbors(&me.state)
 		ndist := me.dist + 1
+		// optimization loop; the idea is that once you're in one of the
+		// half-loops, you'll have to finish the loop because you can't
+		// turn, so might as well just follow all those steps now.
 		for len(nbrs) == 1 && nbrs[0].position != eSpot {
 			nbrs = neighbors(&nbrs[0])
 			ndist++
@@ -260,7 +284,6 @@ func doProblem3(data []byte) any {
 	height := 0
 	grid := make(map[point]byte)
 	var eSpot, sSpot point
-	sulfurName := make(map[point]int)
 	for scanner.Scan() {
 		width = max(width, len(scanner.Bytes()))
 		for y, ch := range scanner.Bytes() {
@@ -271,28 +294,37 @@ func doProblem3(data []byte) any {
 				sSpot = here
 			case 'E':
 				eSpot = here
-			case '@':
-				sulfurName[here] = 1 << len(sulfurName)
 			}
 		}
 		height++
 	}
-	midLineRecordSpots := make(map[point]bool)
-	for spot := range grid {
-		if spot.x == sSpot.x {
-			switch grid[point{spot.x - 1, spot.y}] {
-			case '.', '@':
-				midLineRecordSpots[spot] = true
-			}
-		}
-	}
-	midLineRecord := make(map[point]*qType)
+
+	// Strategy:
+	// - Do a Dijkstra run through the grid to find all the loops - a loop
+	//   starts when you step off the midline and is complete when
+	//   you get back to the starting spot.
+	// - "fast forward" all those loops to just a bit before we have exactly
+	//   enough sulfur
+	// - Do a second Dijkstra run with all those fast-forwarded loops as
+	//   startpoints
+
+	loopRecord := make(map[point]*qType) // loop start position -> looped queue entry
+
 	initState := cartState{position: sSpot, direction: point{0, 1}, sulfurs: 0}
 	neighbors := func(where *cartState) []cartState {
 		retval := make([]cartState, 0, 3)
-		fwdSpot := cartState{position: addpt(where.position, where.direction), direction: where.direction, sulfurs: where.sulfurs}
-		leftSpot := cartState{position: addpt(where.position, leftpt(where.direction)), direction: leftpt(where.direction), sulfurs: where.sulfurs}
-		rightSpot := cartState{position: addpt(where.position, rightpt(where.direction)), direction: rightpt(where.direction), sulfurs: where.sulfurs}
+		fwdSpot := cartState{
+			position:  addpt(where.position, where.direction),
+			direction: where.direction,
+			sulfurs:   where.sulfurs}
+		leftSpot := cartState{
+			position:  addpt(where.position, leftpt(where.direction)),
+			direction: leftpt(where.direction),
+			sulfurs:   where.sulfurs}
+		rightSpot := cartState{
+			position:  addpt(where.position, rightpt(where.direction)),
+			direction: rightpt(where.direction),
+			sulfurs:   where.sulfurs}
 		for _, st := range []*cartState{&fwdSpot, &leftSpot, &rightSpot} {
 			switch grid[st.position] {
 			case '.':
@@ -314,54 +346,63 @@ func doProblem3(data []byte) any {
 		var myQueue P1Queue
 		myQueue = append(myQueue, &qType{dist: 0, state: initState})
 		heap.Init(&myQueue)
-		cache0 := make(map[cartState]bool)
-		cache1 := make(map[cartState]bool)
-		for myQueue.Len() > 0 && len(midLineRecord) < len(midLineRecordSpots) {
+		type cacheType struct {
+			state      cartState
+			loopStartP point
+		}
+		cache := make(map[cacheType]bool)
+		for myQueue.Len() > 0 {
 			me := heap.Pop(&myQueue).(*qType)
-			if me.prevMidlineUp == nil {
-				if cache0[me.state] {
+			cacheVal := cacheType{state: me.state}
+			if me.loopStart != nil {
+				loopStartP := me.loopStart.state.position
+				// bail if someone got our loop already
+				if loopRecord[loopStartP] != nil {
 					continue
 				}
-				cache0[me.state] = true
-			} else {
-				if cache1[me.state] {
-					continue
-				}
-				cache1[me.state] = true
+				cacheVal.loopStartP = loopStartP
 			}
-			pMidUp := me.prevMidlineUp
-			if me.state.direction == (point{-1, 0}) && midLineRecordSpots[me.state.position] {
-				if pMidUp != nil && me.state.position == pMidUp.state.position && midLineRecord[me.state.position] == nil {
-					midLineRecord[me.state.position] = me
-					continue
-				}
-				pMidUp = me
+			if cache[cacheVal] {
+				continue
 			}
+			cache[cacheVal] = true
+			loopStart := me.loopStart
+			// blank the "loop start" pointer on midline travel
 			if me.state.direction.x == 0 && me.state.position.x == sSpot.x {
-				pMidUp = nil
+				loopStart = nil
+			}
+			if me.state.direction.y == 0 && me.state.position.x == sSpot.x+me.state.direction.x {
+				// vertical travel and we just stepped off the midline
+
+				if loopStart == nil { // new loop
+					if loopRecord[me.state.position] != nil {
+						// we already have this loop
+						continue
+					}
+					loopStart = me
+				} else if me.loopStart.state.position == me.state.position {
+					// we finished a loop
+					loopRecord[me.state.position] = me
+					continue
+				}
 			}
 			nbrs := neighbors(&me.state)
 			ndist := me.dist + 1
-			for len(nbrs) == 1 && nbrs[0].position.x != eSpot.x {
+			for len(nbrs) == 1 && nbrs[0].position != eSpot {
 				nbrs = neighbors(&nbrs[0])
 				ndist++
 			}
 			for _, nbr := range nbrs {
-				heap.Push(&myQueue, &qType{dist: ndist, state: nbr, prevMidlineUp: pMidUp})
+				heap.Push(&myQueue, &qType{dist: ndist, state: nbr, loopStart: loopStart})
 			}
 		}
 	}
 	{
 		var myQueue P1Queue
-		largestSulfurStep := 0
-		for _, loopedState := range midLineRecord {
-			sulfurStep := loopedState.state.sulfurs - loopedState.prevMidlineUp.state.sulfurs
-			largestSulfurStep = max(largestSulfurStep, sulfurStep)
-		}
-		for _, loopedState := range midLineRecord {
-			sulfurStep := loopedState.state.sulfurs - loopedState.prevMidlineUp.state.sulfurs
-			distStep := loopedState.dist - loopedState.prevMidlineUp.dist
-			nSteps := (sulfurGoal - 2*largestSulfurStep - loopedState.state.sulfurs) / sulfurStep
+		for _, loopedState := range loopRecord {
+			sulfurStep := loopedState.state.sulfurs - loopedState.loopStart.state.sulfurs
+			distStep := loopedState.dist - loopedState.loopStart.dist
+			nSteps := (sulfurGoal - 2*sulfurStep - loopedState.state.sulfurs) / sulfurStep
 			endSulfurs := loopedState.state.sulfurs + nSteps*sulfurStep
 			endDist := loopedState.dist + nSteps*distStep
 			myQueue = append(myQueue,
@@ -371,9 +412,8 @@ func doProblem3(data []byte) any {
 						sulfurs:   endSulfurs,
 						position:  loopedState.state.position,
 						direction: loopedState.state.direction},
-					prevMidlineUp: loopedState,
+					loopStart: loopedState,
 				})
-			// fmt.Println("dist: ", endDist, "starting from", loopedState.state.position, "with sulfur step", sulfurStep)
 		}
 		heap.Init(&myQueue)
 		cache := make(map[cartState]bool)
@@ -384,9 +424,9 @@ func doProblem3(data []byte) any {
 			}
 			cache[me.state] = true
 			if grid[me.state.position] == 'E' {
+				// fmt.Println(me.dist, "starting from", me.prevMidlineUp.state.position)
 				return me.dist
 			}
-			//			fmt.Println(me.dist, "starting from", me.prevMidlineUp.state.position)
 			ndist := me.dist + 1
 			nbrs := neighbors(&me.state)
 			for len(nbrs) == 1 && nbrs[0].position != eSpot {
@@ -394,7 +434,7 @@ func doProblem3(data []byte) any {
 				ndist++
 			}
 			for _, nbr := range nbrs {
-				heap.Push(&myQueue, &qType{dist: ndist, state: nbr, prevMidlineUp: me.prevMidlineUp})
+				heap.Push(&myQueue, &qType{dist: ndist, state: nbr, loopStart: me.loopStart})
 			}
 		}
 	}
