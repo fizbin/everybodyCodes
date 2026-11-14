@@ -6,8 +6,12 @@ import (
 	"container/heap"
 	"flag"
 	"fmt"
+	"log"
 	"os"
+	"runtime/pprof"
 )
+
+var cpuprofile = flag.String("cpuprofile", "", "write cpu profile to file")
 
 var input1 = flag.String("p1", `..\input\everybody_codes_e2026_q15_p1.txt`, "the input for part 1")
 var input2 = flag.String("p2", `..\input\everybody_codes_e2026_q15_p2.txt`, "the input for part 2")
@@ -17,6 +21,14 @@ const doingPart = 3
 
 func main() {
 	flag.Parse()
+	if *cpuprofile != "" {
+		f, err := os.Create(*cpuprofile)
+		if err != nil {
+			log.Fatal(err)
+		}
+		pprof.StartCPUProfile(f)
+		defer pprof.StopCPUProfile()
+	}
 	if doingPart >= 1 {
 		infile := *input1
 		data, err := os.ReadFile(infile)
@@ -174,23 +186,26 @@ func doProblem2(data []byte) any {
 	height := 0
 	grid := make(map[point]byte)
 	sSpot := point{}
+	eSpot := point{}
 	sulfurName := make(map[point]int)
 	for scanner.Scan() {
 		width = max(width, len(scanner.Bytes()))
 		for y, ch := range scanner.Bytes() {
 			here := point{height, y}
 			grid[here] = ch
-			if ch == 'S' {
+			switch ch {
+			case 'S':
 				sSpot = here
-			}
-			if ch == '@' {
+			case 'E':
+				eSpot = here
+			case '@':
 				sulfurName[here] = 1 << len(sulfurName)
 			}
 		}
 		height++
 	}
 	initState := cartState{position: sSpot, direction: point{0, 1}, sulfurs: 0}
-	neighbors := func(where cartState) []cartState {
+	neighbors := func(where *cartState) []cartState {
 		retval := make([]cartState, 0, 3)
 		fwdSpot := cartState{position: addpt(where.position, where.direction), direction: where.direction, sulfurs: where.sulfurs}
 		leftSpot := cartState{position: addpt(where.position, leftpt(where.direction)), direction: leftpt(where.direction), sulfurs: where.sulfurs}
@@ -224,9 +239,14 @@ func doProblem2(data []byte) any {
 		if grid[me.state.position] == 'E' && me.state.sulfurs >= 2026 {
 			return me.dist
 		}
-		nbrs := neighbors(me.state)
+		nbrs := neighbors(&me.state)
+		ndist := me.dist + 1
+		for len(nbrs) == 1 && nbrs[0].position != eSpot {
+			nbrs = neighbors(&nbrs[0])
+			ndist++
+		}
 		for _, nbr := range nbrs {
-			heap.Push(&myQueue, &qType{dist: me.dist + 1, state: nbr})
+			heap.Push(&myQueue, &qType{dist: ndist, state: nbr})
 		}
 	}
 
@@ -239,17 +259,19 @@ func doProblem3(data []byte) any {
 	width := 0
 	height := 0
 	grid := make(map[point]byte)
-	sSpot := point{}
+	var eSpot, sSpot point
 	sulfurName := make(map[point]int)
 	for scanner.Scan() {
 		width = max(width, len(scanner.Bytes()))
 		for y, ch := range scanner.Bytes() {
 			here := point{height, y}
 			grid[here] = ch
-			if ch == 'S' {
+			switch ch {
+			case 'S':
 				sSpot = here
-			}
-			if ch == '@' {
+			case 'E':
+				eSpot = here
+			case '@':
 				sulfurName[here] = 1 << len(sulfurName)
 			}
 		}
@@ -266,7 +288,7 @@ func doProblem3(data []byte) any {
 	}
 	midLineRecord := make(map[point]*qType)
 	initState := cartState{position: sSpot, direction: point{0, 1}, sulfurs: 0}
-	neighbors := func(where cartState) []cartState {
+	neighbors := func(where *cartState) []cartState {
 		retval := make([]cartState, 0, 3)
 		fwdSpot := cartState{position: addpt(where.position, where.direction), direction: where.direction, sulfurs: where.sulfurs}
 		leftSpot := cartState{position: addpt(where.position, leftpt(where.direction)), direction: leftpt(where.direction), sulfurs: where.sulfurs}
@@ -307,7 +329,6 @@ func doProblem3(data []byte) any {
 				}
 				cache1[me.state] = true
 			}
-			nbrs := neighbors(me.state)
 			pMidUp := me.prevMidlineUp
 			if me.state.direction == (point{-1, 0}) && midLineRecordSpots[me.state.position] {
 				if pMidUp != nil && me.state.position == pMidUp.state.position && midLineRecord[me.state.position] == nil {
@@ -319,8 +340,14 @@ func doProblem3(data []byte) any {
 			if me.state.direction.x == 0 && me.state.position.x == sSpot.x {
 				pMidUp = nil
 			}
+			nbrs := neighbors(&me.state)
+			ndist := me.dist + 1
+			for len(nbrs) == 1 && nbrs[0].position.x != eSpot.x {
+				nbrs = neighbors(&nbrs[0])
+				ndist++
+			}
 			for _, nbr := range nbrs {
-				heap.Push(&myQueue, &qType{dist: me.dist + 1, state: nbr, prevMidlineUp: pMidUp})
+				heap.Push(&myQueue, &qType{dist: ndist, state: nbr, prevMidlineUp: pMidUp})
 			}
 		}
 	}
@@ -360,9 +387,14 @@ func doProblem3(data []byte) any {
 				return me.dist
 			}
 			//			fmt.Println(me.dist, "starting from", me.prevMidlineUp.state.position)
-			nbrs := neighbors(me.state)
+			ndist := me.dist + 1
+			nbrs := neighbors(&me.state)
+			for len(nbrs) == 1 && nbrs[0].position != eSpot {
+				nbrs = neighbors(&nbrs[0])
+				ndist++
+			}
 			for _, nbr := range nbrs {
-				heap.Push(&myQueue, &qType{dist: me.dist + 1, state: nbr, prevMidlineUp: me.prevMidlineUp})
+				heap.Push(&myQueue, &qType{dist: ndist, state: nbr, prevMidlineUp: me.prevMidlineUp})
 			}
 		}
 	}
