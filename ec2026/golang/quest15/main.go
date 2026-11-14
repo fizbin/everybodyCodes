@@ -57,6 +57,7 @@ func addpt(a, b point) point {
 func leftpt(a point) point {
 	return point{-a.y, a.x}
 }
+
 func rightpt(a point) point {
 	return point{a.y, -a.x}
 }
@@ -66,14 +67,22 @@ type cartState struct {
 	sulfurs             int
 }
 
+// only for p2
+type cartOrientation struct {
+	position, direction point
+}
+
 type qType struct {
-	dist          int
-	state         cartState
+	dist  int
+	state cartState
+
+	// this field is only used in the first part of p3; mostly it's nil
 	prevMidlineUp *qType
 }
 
 type P1Queue []*qType
 
+// implementation of heap.Interface, mostly from the golang docs
 func (pq P1Queue) Len() int { return len(pq) }
 
 func (pq P1Queue) Less(i, j int) bool {
@@ -94,7 +103,7 @@ func (pq *P1Queue) Pop() any {
 	old := *pq
 	n := len(old)
 	item := old[n-1]
-	old[n-1] = nil
+	old[n-1] = nil // for gc
 	*pq = old[0 : n-1]
 	return item
 }
@@ -181,7 +190,6 @@ func doProblem2(data []byte) any {
 		height++
 	}
 	initState := cartState{position: sSpot, direction: point{0, 1}, sulfurs: 0}
-	cache := make(map[cartState]bool)
 	neighbors := func(where cartState) []cartState {
 		retval := make([]cartState, 0, 3)
 		fwdSpot := cartState{position: addpt(where.position, where.direction), direction: where.direction, sulfurs: where.sulfurs}
@@ -201,12 +209,18 @@ func doProblem2(data []byte) any {
 	var myQueue P1Queue
 	myQueue = append(myQueue, &qType{dist: 0, state: initState})
 	heap.Init(&myQueue)
+	// note that the cache key type doesn't include sulfurs this time
+	cache := make(map[cartOrientation]int)
 	for myQueue.Len() > 0 {
 		me := heap.Pop(&myQueue).(*qType)
-		if cache[me.state] {
+		meOrientation := cartOrientation{direction: me.state.direction, position: me.state.position}
+		if cVal, ok := cache[meOrientation]; ok && cVal >= me.state.sulfurs {
+			// Our cache this time also throws stuff away if we've already
+			// been here facing the same direction with more sulfurs,
+			// not just when the sulfur count was exactly equal
 			continue
 		}
-		cache[me.state] = true
+		cache[meOrientation] = me.state.sulfurs
 		if grid[me.state.position] == 'E' && me.state.sulfurs >= 2026 {
 			return me.dist
 		}
@@ -221,7 +235,6 @@ func doProblem2(data []byte) any {
 
 func doProblem3(data []byte) any {
 	sulfurGoal := 202620262026
-	sulfurAlmostGoal := sulfurGoal - 1000
 	scanner := bufio.NewScanner(bytes.NewReader(data))
 	width := 0
 	height := 0
@@ -263,12 +276,14 @@ func doProblem3(data []byte) any {
 			case '.':
 				retval = append(retval, *st)
 			case 'E':
-				if where.sulfurs == sulfurGoal {
+				if st.sulfurs == sulfurGoal {
 					retval = append(retval, *st)
 				}
 			case '@':
 				st.sulfurs++
-				retval = append(retval, *st)
+				if st.sulfurs <= sulfurGoal {
+					retval = append(retval, *st)
+				}
 			}
 		}
 		return retval
@@ -292,9 +307,6 @@ func doProblem3(data []byte) any {
 				}
 				cache1[me.state] = true
 			}
-			if grid[me.state.position] == 'E' && me.state.sulfurs >= 2026 {
-				return me.dist
-			}
 			nbrs := neighbors(me.state)
 			pMidUp := me.prevMidlineUp
 			if me.state.direction == (point{-1, 0}) && midLineRecordSpots[me.state.position] {
@@ -314,10 +326,15 @@ func doProblem3(data []byte) any {
 	}
 	{
 		var myQueue P1Queue
+		largestSulfurStep := 0
+		for _, loopedState := range midLineRecord {
+			sulfurStep := loopedState.state.sulfurs - loopedState.prevMidlineUp.state.sulfurs
+			largestSulfurStep = max(largestSulfurStep, sulfurStep)
+		}
 		for _, loopedState := range midLineRecord {
 			sulfurStep := loopedState.state.sulfurs - loopedState.prevMidlineUp.state.sulfurs
 			distStep := loopedState.dist - loopedState.prevMidlineUp.dist
-			nSteps := (sulfurAlmostGoal - loopedState.state.sulfurs) / sulfurStep
+			nSteps := (sulfurGoal - 2*largestSulfurStep - loopedState.state.sulfurs) / sulfurStep
 			endSulfurs := loopedState.state.sulfurs + nSteps*sulfurStep
 			endDist := loopedState.dist + nSteps*distStep
 			myQueue = append(myQueue,
@@ -327,8 +344,9 @@ func doProblem3(data []byte) any {
 						sulfurs:   endSulfurs,
 						position:  loopedState.state.position,
 						direction: loopedState.state.direction},
-					prevMidlineUp: nil,
+					prevMidlineUp: loopedState,
 				})
+			// fmt.Println("dist: ", endDist, "starting from", loopedState.state.position, "with sulfur step", sulfurStep)
 		}
 		heap.Init(&myQueue)
 		cache := make(map[cartState]bool)
@@ -338,12 +356,13 @@ func doProblem3(data []byte) any {
 				continue
 			}
 			cache[me.state] = true
-			if grid[me.state.position] == 'E' && me.state.sulfurs >= 2026 {
+			if grid[me.state.position] == 'E' {
 				return me.dist
 			}
+			//			fmt.Println(me.dist, "starting from", me.prevMidlineUp.state.position)
 			nbrs := neighbors(me.state)
 			for _, nbr := range nbrs {
-				heap.Push(&myQueue, &qType{dist: me.dist + 1, state: nbr})
+				heap.Push(&myQueue, &qType{dist: me.dist + 1, state: nbr, prevMidlineUp: me.prevMidlineUp})
 			}
 		}
 	}
