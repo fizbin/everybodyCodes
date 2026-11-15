@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"flag"
 	"fmt"
-	"maps"
 	"os"
 	"regexp"
 	"strconv"
@@ -52,13 +51,6 @@ type point struct {
 	x, y int
 }
 
-func minpt(pt point) point {
-	if pt.y < pt.x {
-		return point{pt.y, pt.x}
-	}
-	return pt
-}
-
 func doProblem1(data []byte) any {
 	scanner := bufio.NewScanner(bytes.NewReader(data))
 	prsr1 := regexp.MustCompile(`portals: (\d+)`)
@@ -79,63 +71,54 @@ func doProblem1(data []byte) any {
 
 	connections := make(map[point]bool)
 	for start := range portalCount {
-		connections[minpt(point{start, (start + 1) % portalCount})] = true
+		connections[(point{start, (start + 1) % portalCount})] = true
+		connections[(point{(start + 1) % portalCount, start})] = true
 	}
-	// oPD := computePortalDist(portalCount, connections)
-	// originalTotal := 0
-	// for portal := range portalCount {
-	// 	for end := range portalCount {
-	// 		originalTotal += oPD[portal][end]
-	// 	}
-	// }
 	originalTotal := (portalCount * portalCount * portalCount) / 4
 	for idx := range side1 {
-		connections[minpt(point{side1[idx], side2[idx]})] = true
+		connections[(point{side1[idx], side2[idx]})] = true
+		connections[(point{side2[idx], side1[idx]})] = true
 	}
 
-	portalDist := computePortalDist(portalCount, connections, make(map[point]int))
+	portalDist := computePortalDist(portalCount, connections)
 
 	sum := sumPortalDist(portalDist)
 	return originalTotal - sum
 }
 
-func sumPortalDist(portalDist map[point]int) int {
+func sumPortalDist(portalDist []int) int {
 	sum := 0
 	for _, dist := range portalDist {
 		sum += dist
 	}
-	return sum * 2
+	return sum
 }
 
-func computePortalDist(portalCount int, connections map[point]bool, portalDist map[point]int) map[point]int {
-	portalsToWatch := make(map[int]bool)
-	for start := range portalCount {
-		for end := start + 1; end < portalCount; end++ {
-			if _, ok := portalDist[point{start, end}]; !ok {
-				portalDist[point{start, end}] = portalCount
-			}
-		}
-		portalDist[point{start, start}] = 0
-		portalsToWatch[start] = true
+func computePortalDist(portalCount int, connections map[point]bool) []int {
+	retval := make([]int, portalCount*portalCount)
+	get := func(a, b int) int { return retval[a*portalCount+b] }
+	set := func(a, b, c int) { retval[a*portalCount+b] = c }
+	for idx := range retval {
+		retval[idx] = 10000
 	}
-	for len(portalsToWatch) > 0 {
-		oPortalsToWatch := portalsToWatch
-		portalsToWatch = make(map[int]bool)
-		for portal := range portalCount {
-			for other := range oPortalsToWatch {
-				if connections[minpt(point{portal, other})] {
-					for end := range portalCount {
-						newval := 1 + portalDist[minpt(point{other, end})]
-						if newval < portalDist[minpt(point{portal, end})] {
-							portalsToWatch[portal] = true
-							portalDist[minpt(point{portal, end})] = newval
-						}
-					}
+	for a := range portalCount {
+		set(a, a, 0)
+	}
+	for pt := range connections {
+		set(pt.x, pt.y, 1)
+	}
+	for midNode := range portalCount {
+		for start := range portalCount {
+			for end := range portalCount {
+				newval := get(start, midNode) + get(midNode, end)
+				oldval := get(start, end)
+				if newval < oldval {
+					set(start, end, newval)
 				}
 			}
 		}
 	}
-	return portalDist
+	return retval
 }
 
 func doProblem2(data []byte) any {
@@ -165,8 +148,7 @@ func doProblem2(data []byte) any {
 		connections[point{start, (start + 3) % portalCount}] = true
 		connections[point{start, (start + portalCount - 3) % portalCount}] = true
 	}
-	partialDist := make(map[point]int)
-	originalTotal := sumPortalDist(computePortalDist(portalCount, connections, partialDist))
+	originalTotal := sumPortalDist(computePortalDist(portalCount, connections))
 	// fmt.Println("originalTotal", originalTotal)
 	for idx := range side1 {
 		connections[point{side1[idx] - 1, side2[idx] - 1}] = true
@@ -179,9 +161,7 @@ func doProblem2(data []byte) any {
 				connections[point{start, end}] = true
 				connections[point{end, start}] = true
 
-				cloned := maps.Clone(partialDist)
-
-				newTotal := sumPortalDist(computePortalDist(portalCount, connections, cloned))
+				newTotal := sumPortalDist(computePortalDist(portalCount, connections))
 				// fmt.Println("newTotal", newTotal)
 				resonance = max(resonance, originalTotal-newTotal)
 				delete(connections, point{start, end})
@@ -226,8 +206,7 @@ func doProblem3(data []byte) any {
 		connections[point{start, (start + 3) % portalCount}] = true
 		connections[point{start, (start + portalCount - 3) % portalCount}] = true
 	}
-	partialDist := make(map[point]int)
-	originalTotal := sumPortalDist(computePortalDist(portalCount, connections, partialDist))
+	originalTotal := sumPortalDist(computePortalDist(portalCount, connections))
 	// fmt.Println("originalTotal", originalTotal)
 	for idx := range side1 {
 		connections[point{side1[idx] - 1, side2[idx] - 1}] = true
@@ -247,8 +226,7 @@ func doProblem3(data []byte) any {
 					added[idx] = true
 				}
 			}
-			cloned := maps.Clone(partialDist)
-			newTotal := sumPortalDist(computePortalDist(portalCount, connections, cloned))
+			newTotal := sumPortalDist(computePortalDist(portalCount, connections))
 			// fmt.Println("newTotal", newTotal, "for", arrangement)
 			resonance = max(resonance, originalTotal-newTotal)
 			for idx, pt := range arrangement {
