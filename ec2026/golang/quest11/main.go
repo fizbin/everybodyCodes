@@ -5,10 +5,14 @@ import (
 	"bytes"
 	"flag"
 	"fmt"
+	"log"
 	"os"
 	"regexp"
+	"runtime/pprof"
 	"strconv"
 )
+
+var cpuprofile = flag.String("cpuprofile", "", "write cpu profile to file")
 
 var input1 = flag.String("p1", `..\input\everybody_codes_e2026_q11_p1.txt`, "the input for part 1")
 var input2 = flag.String("p2", `..\input\everybody_codes_e2026_q11_p2.txt`, "the input for part 2")
@@ -18,6 +22,14 @@ const doingPart = 3
 
 func main() {
 	flag.Parse()
+	if *cpuprofile != "" {
+		f, err := os.Create(*cpuprofile)
+		if err != nil {
+			log.Fatal(err)
+		}
+		pprof.StartCPUProfile(f)
+		defer pprof.StopCPUProfile()
+	}
 	if doingPart >= 1 {
 		infile := *input1
 		data, err := os.ReadFile(infile)
